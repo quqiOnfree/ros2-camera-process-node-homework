@@ -14,15 +14,19 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(OpenCV REQUIRED)
 
 add_executable(detect_node src/detect_node.cpp)
 target_include_directories(detect_node PUBLIC
+  ${OpenCV_INCLUDE_DIRS}
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
 target_link_libraries(
   detect_node
+  ${OpenCV_LIBS}
   ${rclcpp_TARGETS}
   ${std_msgs_TARGETS}
+  usb_cam
 )
 
 install(TARGETS detect_node
