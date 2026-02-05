@@ -3,8 +3,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <exception>
-#include <format>
 #include <map>
 #include <opencv2/core.hpp>
 #include <opencv2/core/mat.hpp>
@@ -13,7 +13,6 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
-#include <print>
 #include <ranges>
 #include <span>
 #include <utility>
@@ -89,10 +88,11 @@ public:
     return true;
   }
 
-  std::int8_t decode(cv::InputArray src, const std::vector<cv::Point> &points,
-                     cv::InputOutputArray dst = cv::noArray()) const {
+  bool decode(cv::InputArray src, const std::vector<cv::Point> &points,
+              std::uint8_t &num, double &confidence,
+              cv::InputOutputArray dst = cv::noArray()) const {
     if (points.size() != 4) {
-      return -1;
+      return false;
     }
     cv::Point2f arr[4] = {points[0], points[1], points[2], points[3]};
     reorder<float>(arr);
@@ -123,7 +123,7 @@ public:
           return cv::contourArea(a) < cv::contourArea(b);
         });
     if (res == contours.end()) {
-      return -1;
+      return false;
     }
     auto moment = cv::moments(*res);
     cv::Mat hu_moment;
@@ -136,10 +136,13 @@ public:
       dist_vec.push_back({dist, number});
     }
     auto it = std::ranges::min_element(dist_vec.begin(), dist_vec.end());
-    if (it == dist_vec.end() || it->first > 10.0) {
-      return -1;
+    if (it == dist_vec.end()) { //  || it->first > 10.0
+      return false;
     }
-    return it->second;
+    double loc_confidence = std::tanh(5.0 / it->first + 1e-9);
+    confidence = loc_confidence;
+    num = it->second;
+    return true;
   }
 
 protected:
@@ -206,4 +209,4 @@ private:
   std::map<std::uint8_t, cv::Mat> m_number_map;
 };
 
-#endif
+#endif // NUMBER_DETECTOR_HPP
