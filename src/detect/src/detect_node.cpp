@@ -6,6 +6,8 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "number_detector.hpp"
+
 class DetectNode: rclcpp::Node {
 public:
   DetectNode(): Node("detect_node") {
