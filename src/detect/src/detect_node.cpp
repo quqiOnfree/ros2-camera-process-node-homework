@@ -33,7 +33,7 @@ public:
                 "Loading template images for number detection...");
     for (std::size_t i = 0; i < 10; ++i) {
       cv::Mat src;
-      std::string path = std::format("detect/templates/{}white.png", i);
+      std::string path = std::format("src/detect/templates/{}white.png", i);
       src = cv::imread(path);
       if (src.empty()) {
         RCLCPP_WARN(this->get_logger(), "Failed to load image: %s",
