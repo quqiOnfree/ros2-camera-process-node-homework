@@ -1,20 +1,22 @@
+#include <cstddef>
 #include <cstdio>
 #include <format>
 #include <memory>
 #include <opencv2/core.hpp>
 #include <opencv2/core/mat.hpp>
+#include <opencv2/core/types.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
-#include <rclcpp/node.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
-#include <std_msgs/msg/string.h>
+#include <std_msgs/msg/int32.hpp>
+#include <std_msgs/msg/float32.hpp>
 #include <string>
 
-#include "number_detector.hpp"
+#include "detect/number_detector.hpp"
 
-class DetectNode : rclcpp::Node {
+class DetectNode : public rclcpp::Node {
 public:
   DetectNode() : Node("detect_node") {
     using std::placeholders::_1;
@@ -22,9 +24,26 @@ public:
         "/camera1/image_raw", 10,
         std::bind(&DetectNode::imageCallback, this, _1));
 
+    digit_class_pub_ = this->create_publisher<std_msgs::msg::Int32>("/digit_class", 10);
+    digit_score_pub_ = this->create_publisher<std_msgs::msg::Float32>("/digit_score", 10);
+    
+    RCLCPP_INFO(this->get_logger(), "Loading template images for number detection...");
+    for (std::size_t i = 0; i < 10; ++i) {
+      cv::Mat src;
+      std::string path = std::format("detect/templates/{}white.png", i);
+      src = cv::imread(path);
+      if (src.empty()) {
+        RCLCPP_WARN(this->get_logger(), "Failed to load image: %s", path.c_str());
+        continue;
+      }
+      number_detector_.add(i, src);
+    }
+
     RCLCPP_INFO(this->get_logger(),
-                "detect_node started, subscribing to /camera1/image_raw");
+                "detect_node started, subscribing to /camera1/image_raw, publishing to /digit_class and /digit_score");
   }
+
+  virtual ~DetectNode() = default;
 
 private:
   void imageCallback(const sensor_msgs::msg::Image::SharedPtr msg) {
@@ -44,31 +63,26 @@ private:
     if (msg->encoding == "rgb8") {
       cv::cvtColor(mat, mat, cv::COLOR_RGB2BGR);
     }
-    RCLCPP_INFO(this->get_logger(), "Received image: %dx%d, channels=%d",
-                mat.cols, mat.rows, mat.channels());
-    cv::Mat gray;
-    cv::cvtColor(mat, gray, cv::COLOR_BGR2GRAY);
-    cv::Mat blur;
-    cv::GaussianBlur(gray, blur, cv::Size{5, 5}, 0);
-    cv::adaptiveThreshold(blur, blur, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C,
-                          cv::THRESH_BINARY, 11, 2);
-    cv::Mat edges;
-    cv::Canny(blur, edges, 50, 150);
-    cv::morphologyEx(edges, edges, cv::MORPH_CLOSE,
-                     cv::getStructuringElement(cv::MORPH_RECT, cv::Size{5, 5}));
-    cv::morphologyEx(edges, edges, cv::MORPH_OPEN,
-                     cv::getStructuringElement(cv::MORPH_RECT, cv::Size{3, 3}));
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(edges, contours, cv::RETR_EXTERNAL,
-                     cv::CHAIN_APPROX_SIMPLE);
-    RCLCPP_INFO(this->get_logger(), "Found %zu contours", contours.size());
-    cv::drawContours(mat, contours, -1, {255, 0, 255}, 2);
-    cv::imwrite(std::format("build/image_{}.png",
-                            this->get_clock()->now().nanoseconds()),
-                mat);
+    std::vector<cv::Point> points;
+    if (!number_detector_.detect(mat, points)) {
+      return;
+    }
+    std_msgs::msg::Int32 digit_class_msg;
+    std_msgs::msg::Float32 digit_score_msg;
+    std::uint8_t num;
+    double confidence;
+    number_detector_.decode(mat, points, num, confidence);
+    RCLCPP_INFO(this->get_logger(), "Detected digit: %d with confidence: %f", num, confidence);
+    digit_class_msg.data = num;
+    digit_score_msg.data = static_cast<float>(confidence);
+    digit_class_pub_->publish(digit_class_msg);
+    digit_score_pub_->publish(digit_score_msg);
   }
 
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
+  rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr digit_class_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr digit_score_pub_;
+  inline static NumberDetector number_detector_;
 };
 
 int main(int argc, char **argv) {
