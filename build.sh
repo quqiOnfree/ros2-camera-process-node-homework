@@ -1,2 +1,1 @@
-cmake -S . -B build
-cmake --build build -j $(nproj)
+colcon build

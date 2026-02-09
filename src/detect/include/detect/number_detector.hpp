@@ -42,7 +42,7 @@ public:
       img = src.getMat().clone();
     }
     // 统一尺寸，减少尺度对匹配的影响
-    cv::resize(img, img, {400, 400});
+    cv::resize(img, img, {800, 800});
     // OTSU 二值化，便于后续边缘检测
     cv::threshold(img, img, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
     // 边缘检测，提取轮廓信息
@@ -125,12 +125,6 @@ public:
    * @param confidence 输出置信度（0..1）
    * @param dst 可选输出透视变换后的图像
    * @return 成功识别返回 true，否则 false
-   *
-   * 关键步骤与 OpenCV 函数：
-   *  - `getPerspectiveTransform` + `warpPerspective`：把不规则四边形变换到标准正方形，便于后续统一处理。
-   *  - 二值化、Canny 与形态学：同 `add`，用于提取主要轮廓。
-   *  - `moments` / `HuMoments`：计算候选区域的 Hu 矩。
-   *  - `matchShapes`：将候选 Hu 矩与模板 Hu 矩计算距离，选择最小距离的模板作为识别结果。
    */
   bool decode(cv::InputArray src, const std::vector<cv::Point> &points,
               std::uint8_t &num, double &confidence,
@@ -143,14 +137,14 @@ public:
     reorder<float>(arr);
     const cv::Point2f standard[4] = {
         {0, 0},
-        {800, 0},
-        {0, 800},
-        {800, 800},
+        {1000, 0},
+        {0, 1000},
+        {1000, 1000},
     };
     // 计算透视变换矩阵并应用，得到标准尺寸的候选图像
     auto matrix = cv::getPerspectiveTransform(arr, standard);
     cv::Mat img;
-    cv::warpPerspective(src, img, matrix, {800, 800});
+    cv::warpPerspective(src, img, matrix, {1000, 1000});
     if (!dst.empty()) {
       img.copyTo(dst);
     }
@@ -184,7 +178,7 @@ public:
       dist_vec.push_back({dist, number});
     }
     auto it = std::ranges::min_element(dist_vec.begin(), dist_vec.end());
-    if (it == dist_vec.end()) { //  || it->first > 10.0
+    if (it == dist_vec.end()) {
       return false;
     }
     // 将距离映射为置信度，距离越小置信度越高。使用 tanh 做平滑映射

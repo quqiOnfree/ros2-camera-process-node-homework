@@ -16,7 +16,6 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(OpenCV REQUIRED)
-find_package(usb_cam REQUIRED)
 
 add_executable(detect_node src/detect_node.cpp)
 target_include_directories(detect_node PUBLIC
@@ -34,6 +33,9 @@ target_link_libraries(detect_node PUBLIC
 
 install(TARGETS detect_node
   DESTINATION lib/${PROJECT_NAME})
+
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
